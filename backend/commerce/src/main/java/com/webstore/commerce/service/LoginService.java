@@ -6,6 +6,7 @@ import com.webstore.commerce.dto.response.LoginResponse;
 import com.webstore.commerce.entity.Role;
 import com.webstore.commerce.entity.User;
 import com.webstore.commerce.exception.errors.BadCredentialsException;
+import com.webstore.commerce.exception.errors.DisabledException;
 import com.webstore.commerce.mapper.UserMapper;
 import com.webstore.commerce.repository.UserRepository;
 import com.webstore.commerce.security.JwtService;
@@ -38,6 +39,10 @@ public class LoginService {
                 .orElseThrow(() ->
                         new BadCredentialsException("Invalid email or password")
             );
+
+        if(!user.isActive()){
+            throw new DisabledException("User account is inactive, please contact support");
+        }
 
         return jwtService.generateToken(user);
     }
