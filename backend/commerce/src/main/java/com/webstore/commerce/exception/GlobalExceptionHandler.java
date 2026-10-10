@@ -1,6 +1,7 @@
 package com.webstore.commerce.exception;
 
 import com.webstore.commerce.exception.errors.BadCredentialsException;
+import com.webstore.commerce.exception.errors.DisabledException;
 import com.webstore.commerce.exception.errors.ResourceAlreadyExistsException;
 import com.webstore.commerce.exception.errors.ResourceNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -61,6 +62,18 @@ public class GlobalExceptionHandler {
             err.addError(f.getField(), f.getDefaultMessage());
         }
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
+    }
+
+
+    @ExceptionHandler(DisabledException.class)
+    public ResponseEntity<StandardError> disabledException(DisabledException e, HttpServletRequest http){
+        StandardError err = new StandardError();
+        err.setTimestamp(Instant.now());
+        err.setStatus(HttpStatus.UNAUTHORIZED.value());
+        err.setMessage(e.getMessage());
+        err.setError("Account Disabled");
+        err.setPath(http.getRequestURI());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(err);
     }
 
 }
