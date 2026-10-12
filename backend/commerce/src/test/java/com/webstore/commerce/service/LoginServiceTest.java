@@ -3,7 +3,7 @@ package com.webstore.commerce.service;
 import com.webstore.commerce.dto.request.CreateUserRequest;
 import com.webstore.commerce.dto.request.LoginRequest;
 import com.webstore.commerce.dto.response.LoginResponse;
-import com.webstore.commerce.entity.Role;
+import com.webstore.commerce.entity.enums.Role;
 import com.webstore.commerce.entity.User;
 import com.webstore.commerce.exception.errors.BadCredentialsException;
 import com.webstore.commerce.exception.errors.DisabledException;

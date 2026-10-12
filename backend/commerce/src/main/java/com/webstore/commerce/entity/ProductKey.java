@@ -1,5 +1,6 @@
 package com.webstore.commerce.entity;
 
+import com.webstore.commerce.entity.enums.KeyStatus;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -9,7 +10,12 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "product_keys")
+@Table(
+        name = "product_keys",
+        indexes = {
+                @Index(name = "idx_product_keys_checkout", columnList = "product_id, status")
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -25,6 +31,10 @@ public class ProductKey {
     private Product product;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "supplier_id")
+    private Supplier supplier;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_item_id")
     private OrderItem orderItem;
 
@@ -33,6 +43,9 @@ public class ProductKey {
 
     @Column(name = "key_fingerprint", nullable = false, unique = true, length = 128)
     private String keyFingerprint;
+
+    @Column(name = "cost_price")
+    private Long costPrice;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
@@ -47,8 +60,18 @@ public class ProductKey {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
     @PrePersist
     protected void onCreate() {
-        createdAt = Instant.now();
+        Instant now = Instant.now();
+        createdAt = now;
+        updatedAt = now;
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = Instant.now();
     }
 }

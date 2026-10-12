@@ -1,4 +1,4 @@
-package com.webstore.commerce.entity;
+package com.webstore.commerce.entity.enums;
 
 public enum Role {
     CUSTOMER,
