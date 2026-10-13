@@ -26,6 +26,9 @@ public class Category {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
+    @Column(nullable = false, unique = true, length = 255)
+    private String slug;
+
     @Column(name = "active", nullable = false)
     private boolean active;
 
