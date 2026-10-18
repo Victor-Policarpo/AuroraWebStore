@@ -8,6 +8,7 @@ import com.webstore.commerce.exception.errors.ExternalApiRateLimitException;
 import com.webstore.commerce.exception.errors.ResourceAlreadyExistsException;
 import com.webstore.commerce.exception.errors.ResourceNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
+import org.apache.coyote.BadRequestException;
 import org.springframework.context.MessageSourceResolvable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -151,6 +152,17 @@ public class GlobalExceptionHandler {
         err.setError("Bad Request");
         err.setPath(http.getRequestURI());
 
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
+    }
+
+    @ExceptionHandler(BadRequestException.class)
+    public ResponseEntity<StandardError> badRequest(BadRequestException e, HttpServletRequest request) {
+        StandardError err = new StandardError();
+        err.setTimestamp(Instant.now());
+        err.setStatus(HttpStatus.BAD_REQUEST.value());
+        err.setError("Bad Request");
+        err.setMessage(e.getMessage());
+        err.setPath(request.getRequestURI());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
     }
 
