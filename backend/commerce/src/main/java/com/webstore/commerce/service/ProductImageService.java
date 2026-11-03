@@ -5,6 +5,7 @@ import com.webstore.commerce.dto.response.ProductImageResponse;
 import com.webstore.commerce.entity.Product;
 import com.webstore.commerce.entity.ProductImage;
 import com.webstore.commerce.exception.errors.ResourceNotFoundException;
+import com.webstore.commerce.exception.errors.ExternalApiException;
 import com.webstore.commerce.mapper.ProductImageMapper;
 import com.webstore.commerce.repository.ProductImageRepository;
 import com.webstore.commerce.repository.ProductRepository;
@@ -29,14 +30,18 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 @Service
 @RequiredArgsConstructor
 public class ProductImageService {
+    private static final Logger LOG = Logger.getLogger(ProductImageService.class.getName());
+    public static final int MAX_IMPORTED_IMAGES = 12;
 
     private final ProductImageRepository productImageRepository;
     private final ProductRepository productRepository;
-    private final AwsProperties AwsProperties;
+    private final AwsProperties awsProperties;
     private final S3Client s3Client;
     private final S3Presigner s3Presigner;
     private final ProductImageMapper productImageMapper;
@@ -44,12 +49,8 @@ public class ProductImageService {
     private static final Map<String, String> CONTENT_TYPE_EXTENSIONS = Map.of(
             "image/jpeg", ".jpeg",
             "image/png", ".png",
-            "image/webp", ".webp",
-            "image/gif", ".gif",
-            "video/mp4", ".mp4",
-            "video/webm", ".webm"
+            "image/webp", ".webp"
     );
-    private final AwsProperties awsProperties;
 
     @Value("${spring.servlet.multipart.max-file-size}")
     private DataSize maxFileSize;
@@ -155,6 +156,56 @@ public class ProductImageService {
                                 .build()
                 )
         );
+    }
+
+    public String uploadImportedImage(byte[] bytes, String contentType, String filename, Product product, int order) {
+        if (bytes == null || bytes.length == 0 || bytes.length > maxFileSize.toBytes()) {
+            throw new BadRequestException("IGDB image is empty or exceeds the configured file size limit");
+        }
+        if (!CONTENT_TYPE_EXTENSIONS.containsKey(contentType)) {
+            throw new BadRequestException("IGDB image format is not supported");
+        }
+        if (productImageRepository.countByProductId(product.getId()) >= MAX_IMPORTED_IMAGES) {
+            throw new BadRequestException("Maximum of " + MAX_IMPORTED_IMAGES + " imported images per product reached");
+        }
+        String key = createImagePath(contentType, product.getId());
+        try {
+            s3Client.putObject(PutObjectRequest.builder()
+                            .bucket(awsProperties.getS3().getBucket()).key(key).contentType(contentType).build(),
+                    RequestBody.fromBytes(bytes));
+        } catch (RuntimeException e) {
+            compensateSingleObject(key, e);
+            throw new ExternalApiException("Unable to upload IGDB image to object storage", e);
+        }
+        try {
+            ProductImage image = new ProductImage();
+            image.setProduct(product);
+            image.setS3Key(key);
+            image.setOriginalFilename(filename);
+            image.setContentType(contentType);
+            image.setFileSize((long) bytes.length);
+            image.setDisplayOrder(order);
+            productImageRepository.save(image);
+        } catch (RuntimeException e) {
+            compensateSingleObject(key, e);
+            throw e;
+        }
+        return key;
+    }
+
+    public void deleteStoredObjects(List<String> keys) {
+        for (String key : keys) {
+            s3Client.deleteObject(DeleteObjectRequest.builder()
+                    .bucket(awsProperties.getS3().getBucket()).key(key).build());
+        }
+    }
+
+    private void compensateSingleObject(String key, RuntimeException original) {
+        try { deleteStoredObjects(List.of(key)); }
+        catch (RuntimeException cleanup) {
+            original.addSuppressed(cleanup);
+            LOG.log(Level.SEVERE, "Failed to clean up S3 object after IGDB image failure: " + key, cleanup);
+        }
     }
 
     private String generatePresignedUrl(String s3Key) {
