@@ -1,9 +1,12 @@
 package com.webstore.commerce.integration.igdb;
 
 import com.webstore.commerce.config.IgdbProperties;
+import com.webstore.commerce.exception.errors.BadRequestException;
 import com.webstore.commerce.exception.errors.ExternalApiException;
+import com.webstore.commerce.exception.errors.ResourceNotFoundException;
 import com.webstore.commerce.integration.ExternalApiCallExecutor;
 import com.webstore.commerce.integration.ExternalApiErrors;
+import com.webstore.commerce.integration.igdb.dto.IgdbGame;
 import com.webstore.commerce.integration.igdb.dto.IgdbGameResponse;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.ParameterizedTypeReference;
@@ -42,12 +45,18 @@ public class IgdbClient {
     }
 
     public List<IgdbGameResponse> searchGames(String searchTerm) {
-        String query = buildQuery(normalizeSearchTerm(searchTerm));
+        String query = """
+                search "%s";
+                fields id, name, summary, cover.url,
+                       genres.name, platforms.name,
+                       rating, first_release_date;
+                limit %d;
+                """.formatted(escapeSearchTerm(normalizeSearchTerm(searchTerm)), searchLimit);
 
         try {
             return callExecutor.execute(
-                    "IGDB game search",
-                    () -> performSearch(query),
+                    "IGDB search games",
+                    () -> executeIgdbQuery(query, new ParameterizedTypeReference<List<IgdbGameResponse>>() {}),
                     this::recoverAuthentication
             );
         } catch (RestClientResponseException e) {
@@ -59,46 +68,76 @@ public class IgdbClient {
         }
     }
 
+
+    public IgdbGame getGame(Long igdbId) {
+        if (igdbId == null || igdbId <= 0) {
+            throw new BadRequestException("The IGDB game ID must be a positive number");
+        }
+
+        String query = """
+                fields id, name, summary,
+                cover.image_id,
+                artworks.image_id,
+                screenshots.image_id,
+                videos.video_id,
+                genres.name,
+                platforms.name,
+                involved_companies.company.name,
+                involved_companies.developer,
+                involved_companies.publisher;
+                where id = %d;
+                """.formatted(igdbId);
+        try {
+            List<IgdbGame> games = callExecutor.execute(
+                    "IGDB get game",
+                    () -> executeIgdbQuery(query, new ParameterizedTypeReference<List<IgdbGame>>() {}),
+                    this::recoverAuthentication
+            );
+            if (games.isEmpty()) {
+                throw new ResourceNotFoundException("IGDB returned an empty response for game ID: " + igdbId);
+            }
+            return games.getFirst();
+
+        } catch (RestClientResponseException e) {
+            throw ExternalApiErrors.map("IGDB", e);
+        } catch (ResourceAccessException e) {
+            throw new ExternalApiException("Unable to reach the IGDB API", e);
+        } catch (RestClientException e) {
+            throw new ExternalApiException("Unexpected error while calling the IGDB API", e);
+        }
+    }
+
+
     private boolean recoverAuthentication() {
         igdbAuthService.invalidateToken();
         return true;
     }
 
-    private List<IgdbGameResponse> performSearch(String query) {
-        List<IgdbGameResponse> games = igdbRestClient.post()
+    private <T> List<T> executeIgdbQuery(String query, ParameterizedTypeReference<List<T>> responseType) {
+        List<T> response = igdbRestClient.post()
                 .uri("/games")
                 .header("Client-ID", clientId)
                 .header("Authorization", "Bearer " + igdbAuthService.getAccessToken())
                 .contentType(MediaType.TEXT_PLAIN)
                 .body(query)
                 .retrieve()
-                .body(new ParameterizedTypeReference<List<IgdbGameResponse>>() {});
+                .body(responseType);
 
-        if (games == null) {
+        if (response == null) {
             throw new ExternalApiException("IGDB returned an empty or unexpected response body");
         }
 
-        return games;
-    }
-
-    private String buildQuery(String searchTerm) {
-        return """
-                search "%s";
-                fields id, name, summary, cover.url,
-                       genres.name, platforms.name,
-                       rating, first_release_date;
-                limit %d;
-                """.formatted(escapeSearchTerm(searchTerm), searchLimit);
+        return response;
     }
 
     static String normalizeSearchTerm(String searchTerm) {
         if (searchTerm == null || searchTerm.isBlank()) {
-            throw new IllegalArgumentException("Search term must not be blank");
+            throw new BadRequestException("Search term must not be blank");
         }
 
         String trimmed = searchTerm.trim();
         if (trimmed.length() < MIN_SEARCH_LENGTH || trimmed.length() > MAX_SEARCH_LENGTH) {
-            throw new IllegalArgumentException(
+            throw new BadRequestException(
                     "Search term must contain between " + MIN_SEARCH_LENGTH
                             + " and " + MAX_SEARCH_LENGTH + " characters");
         }

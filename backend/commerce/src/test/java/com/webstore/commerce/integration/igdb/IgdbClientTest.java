@@ -1,6 +1,7 @@
 package com.webstore.commerce.integration.igdb;
 
 import com.webstore.commerce.config.IgdbProperties;
+import com.webstore.commerce.exception.errors.BadRequestException;
 import com.webstore.commerce.exception.errors.ExternalApiAuthenticationException;
 import com.webstore.commerce.exception.errors.ExternalApiException;
 import com.webstore.commerce.exception.errors.ExternalApiRateLimitException;
@@ -234,11 +235,11 @@ class IgdbClientTest {
     @Test
     @DisplayName("Should reject null, blank or out of range search terms")
     void rejectsInvalidSearchTerms() {
-        assertThrows(IllegalArgumentException.class, () -> client.searchGames(null));
-        assertThrows(IllegalArgumentException.class, () -> client.searchGames(""));
-        assertThrows(IllegalArgumentException.class, () -> client.searchGames("   "));
-        assertThrows(IllegalArgumentException.class, () -> client.searchGames("a"));
-        assertThrows(IllegalArgumentException.class, () -> client.searchGames("a".repeat(201)));
+        assertThrows(BadRequestException.class, () -> client.searchGames(null));
+        assertThrows(BadRequestException.class, () -> client.searchGames(""));
+        assertThrows(BadRequestException.class, () -> client.searchGames("   "));
+        assertThrows(BadRequestException.class, () -> client.searchGames("a"));
+        assertThrows(BadRequestException.class, () -> client.searchGames("a".repeat(201)));
         server.verify();
     }
 
