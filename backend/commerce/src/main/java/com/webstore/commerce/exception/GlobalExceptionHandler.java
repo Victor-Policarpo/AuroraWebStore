@@ -1,6 +1,7 @@
 package com.webstore.commerce.exception;
 
 import com.webstore.commerce.exception.errors.BadCredentialsException;
+import com.webstore.commerce.exception.errors.BadRequestException;
 import com.webstore.commerce.exception.errors.DisabledException;
 import com.webstore.commerce.exception.errors.ExternalApiAuthenticationException;
 import com.webstore.commerce.exception.errors.ExternalApiException;
@@ -8,7 +9,6 @@ import com.webstore.commerce.exception.errors.ExternalApiRateLimitException;
 import com.webstore.commerce.exception.errors.ResourceAlreadyExistsException;
 import com.webstore.commerce.exception.errors.ResourceNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
-import org.apache.coyote.BadRequestException;
 import org.springframework.context.MessageSourceResolvable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;

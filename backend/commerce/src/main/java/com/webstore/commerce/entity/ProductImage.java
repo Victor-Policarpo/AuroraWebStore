@@ -9,7 +9,15 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "product_images")
+@Table(
+        name = "product_images",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_product_images_product_display_order",
+                        columnNames = {"product_id", "display_order"}
+                )
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor

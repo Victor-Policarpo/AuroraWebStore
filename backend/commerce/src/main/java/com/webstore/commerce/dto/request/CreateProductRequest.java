@@ -8,10 +8,13 @@ import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
 import java.util.UUID;
+import java.util.List;
 
 public record CreateProductRequest(
-        @NotNull(message = "This field is required and cannot be left blank.")
         UUID categoryId,
+
+        @NotNull(message = "This field is required and cannot be left blank.")
+        UUID productTypeId,
 
         @NotBlank(message = "This field is required and cannot be left blank.")
         @Size(max = 200, message = "This field must contain at most 200 characters.")
@@ -47,6 +50,14 @@ public record CreateProductRequest(
         Long igdbId,
 
         @Positive(message = "This field must be a positive number.")
-        Long steamAppId
+        Long steamAppId,
+
+        List<UUID> categoryIds
 ) {
+    public CreateProductRequest(UUID categoryId, UUID productTypeId, String name, String description,
+                                String slug, String brand, String platform, String region, Long basePrice,
+                                String baseCurrency, Long igdbId, Long steamAppId) {
+        this(categoryId, productTypeId, name, description, slug, brand, platform, region, basePrice,
+                baseCurrency, igdbId, steamAppId, null);
+    }
 }

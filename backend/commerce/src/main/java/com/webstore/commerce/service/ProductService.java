@@ -6,20 +6,24 @@ import com.webstore.commerce.dto.request.UpdateProductStatusRequest;
 import com.webstore.commerce.dto.response.ProductResponse;
 import com.webstore.commerce.entity.Category;
 import com.webstore.commerce.entity.Product;
+import com.webstore.commerce.entity.ProductType;
 import com.webstore.commerce.entity.enums.ProductStatus;
-import com.webstore.commerce.exception.errors.BadCredentialsException;
+import com.webstore.commerce.exception.errors.BadRequestException;
 import com.webstore.commerce.exception.errors.ResourceAlreadyExistsException;
 import com.webstore.commerce.exception.errors.ResourceNotFoundException;
 import com.webstore.commerce.mapper.ProductMapper;
 import com.webstore.commerce.repository.CategoryRepository;
 import com.webstore.commerce.repository.ProductRepository;
-import jakarta.transaction.Transactional;
+import com.webstore.commerce.repository.ProductTypeRepository;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
+import java.util.List;
+import java.util.LinkedHashSet;
 
 @Service
 @RequiredArgsConstructor
@@ -27,6 +31,7 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
+    private final ProductTypeRepository productTypeRepository;
     private final ProductMapper productMapper;
 
     @Transactional
@@ -38,15 +43,24 @@ public class ProductService {
             throw new ResourceAlreadyExistsException("Product with this IGDB ID already exists");
         }
         Product product = productMapper.toEntity(request);
-        product.setCategory(getCategory(request.categoryId()));
+        if (request.categoryIds() != null && !request.categoryIds().isEmpty()) {
+            product.setCategories(new LinkedHashSet<>(getCategories(request.categoryIds())));
+        } else if (request.categoryId() != null) {
+            product.setCategories(new LinkedHashSet<>(List.of(getCategory(request.categoryId()))));
+        } else {
+            throw new BadRequestException("At least one category is required");
+        }
+        product.setProductType(getProductType(request.productTypeId()));
         product.setStatus(ProductStatus.DRAFT);
         return productMapper.toResponse(productRepository.save(product));
     }
 
+    @Transactional(readOnly = true)
     public Page<ProductResponse> findAll(ProductStatus status, UUID categoryId, Pageable pageable) {
         return productRepository.search(status, categoryId, pageable).map(productMapper::toResponse);
     }
 
+    @Transactional(readOnly = true)
     public ProductResponse findById(UUID id) {
         return productMapper.toResponse(getProduct(id));
     }
@@ -63,8 +77,13 @@ public class ProductService {
             throw new ResourceAlreadyExistsException("Product with this IGDB ID already exists");
         }
         productMapper.updateEntity(request, product);
-        if (request.categoryId() != null) {
-            product.setCategory(getCategory(request.categoryId()));
+        if (request.categoryIds() != null) {
+            product.setCategories(new LinkedHashSet<>(getCategories(request.categoryIds())));
+        } else if (request.categoryId() != null) {
+            product.setCategories(new LinkedHashSet<>(List.of(getCategory(request.categoryId()))));
+        }
+        if (request.productTypeId() != null) {
+            product.setProductType(getProductType(request.productTypeId()));
         }
         return productMapper.toResponse(productRepository.save(product));
     }
@@ -85,6 +104,24 @@ public class ProductService {
         return categoryRepository.findById(id).orElseThrow(
                 () -> new ResourceNotFoundException("Category not found")
         );
+    }
+
+    private List<Category> getCategories(List<UUID> ids) {
+        List<Category> categories = categoryRepository.findAllById(ids);
+        if (categories.size() != new LinkedHashSet<>(ids).size()) {
+            throw new ResourceNotFoundException("One or more categories were not found");
+        }
+        return categories;
+    }
+
+    private ProductType getProductType(UUID id) {
+        ProductType productType = productTypeRepository.findById(id).orElseThrow(
+                () -> new ResourceNotFoundException("Product type not found")
+        );
+        if (!productType.isActive()) {
+            throw new BadRequestException("Product type is inactive");
+        }
+        return productType;
     }
 
     private Product getProduct(UUID id) {

@@ -14,16 +14,21 @@ public interface ProductMapper {
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "category", ignore = true)
+    @Mapping(target = "categories", ignore = true)
+    @Mapping(target = "productType", ignore = true)
     @Mapping(target = "status", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     Product toEntity(CreateProductRequest request);
 
-    @Mapping(target = "categoryId", source = "category.id")
+    @Mapping(target = "categoryIds", expression = "java(product.getCategories().stream().map(com.webstore.commerce.entity.Category::getId).toList())")
+    @Mapping(target = "productTypeId", source = "productType.id")
     ProductResponse toResponse(Product product);
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "category", ignore = true)
+    @Mapping(target = "categories", ignore = true)
+    @Mapping(target = "productType", ignore = true)
     @Mapping(target = "status", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)

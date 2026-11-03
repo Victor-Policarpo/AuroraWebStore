@@ -3,26 +3,29 @@ package com.webstore.commerce.controller;
 import com.webstore.commerce.dto.response.IgdbGameSearchResponse;
 import com.webstore.commerce.integration.igdb.IgdbClient;
 import com.webstore.commerce.integration.igdb.IgdbService;
+import com.webstore.commerce.dto.request.ImportIgdbGameRequest;
+import com.webstore.commerce.dto.response.ProductImportResponse;
+import com.webstore.commerce.service.ProductImportService;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/admin/igdb")
 @PreAuthorize("hasAuthority('SCOPE_ADMIN')")
+@RequiredArgsConstructor
 public class IgdbController {
 
     private final IgdbService igdbService;
-
-    public IgdbController(IgdbService igdbService) {
-        this.igdbService = igdbService;
-    }
+    private final ProductImportService productImportService;
 
     @GetMapping("/games")
     public List<IgdbGameSearchResponse> searchGames(
@@ -34,5 +37,10 @@ public class IgdbController {
             String search
     ) {
         return igdbService.searchGames(search);
+    }
+
+    @PostMapping("/import")
+    public ResponseEntity<ProductImportResponse> importGame(@Valid @RequestBody ImportIgdbGameRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(productImportService.importGame(request.igdbId()));
     }
 }

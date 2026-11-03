@@ -3,6 +3,7 @@ package com.webstore.commerce.controller;
 import com.webstore.commerce.config.SecurityConfig;
 import com.webstore.commerce.dto.response.IgdbGameSearchResponse;
 import com.webstore.commerce.integration.igdb.IgdbService;
+import com.webstore.commerce.service.ProductImportService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +19,8 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -30,6 +33,9 @@ class IgdbControllerSecurityTest {
 
     @MockitoBean
     private IgdbService igdbService;
+
+    @MockitoBean
+    private ProductImportService productImportService;
 
     @Test
     @WithMockUser(authorities = "SCOPE_ADMIN")
@@ -77,5 +83,29 @@ class IgdbControllerSecurityTest {
 
         mockMvc.perform(get("/api/v1/admin/igdb/games").param("search", "zelda"))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(authorities = "SCOPE_ADMIN")
+    @DisplayName("Admin can submit an IGDB ID for import")
+    void adminCanImportGame() throws Exception {
+        mockMvc.perform(post("/api/v1/admin/igdb/import")
+                        .contentType("application/json").content("{\"igdbId\":144331}"))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    @WithMockUser(authorities = "SCOPE_CUSTOMER")
+    void customerCannotImportGame() throws Exception {
+        mockMvc.perform(post("/api/v1/admin/igdb/import")
+                        .contentType("application/json").content("{\"igdbId\":144331}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void anonymousCannotImportGame() throws Exception {
+        mockMvc.perform(post("/api/v1/admin/igdb/import")
+                        .contentType("application/json").content("{\"igdbId\":144331}"))
+                .andExpect(status().isUnauthorized());
     }
 }

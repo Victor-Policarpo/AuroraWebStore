@@ -13,13 +13,16 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -28,6 +31,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 @WebMvcTest(controllers = ProductAdminController.class, properties = "springdotenv.enabled=false")
 @Import(SecurityConfig.class)
@@ -43,10 +47,13 @@ class ProductAdminControllerSecurityTest {
     @WithMockUser(authorities = "SCOPE_ADMIN")
     @DisplayName("Admin should list products")
     void adminCanListProducts() throws Exception {
-        when(productService.findAll(any(), any(), any(Pageable.class))).thenReturn(Page.empty());
+        when(productService.findAll(any(), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(productResponse(ProductStatus.DRAFT)), PageRequest.of(0, 20), 1));
 
         mockMvc.perform(get("/api/v1/admin/products"))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].categoryId").doesNotExist())
+                .andExpect(jsonPath("$.content[0].categoryIds.length()").value(2));
     }
 
     @Test
@@ -55,12 +62,27 @@ class ProductAdminControllerSecurityTest {
     void adminCanCreateProduct() throws Exception {
         when(productService.create(any(CreateProductRequest.class))).thenReturn(productResponse(ProductStatus.DRAFT));
 
+        // The response DTO represents the ManyToMany relation only as categoryIds.
+        mockMvc.perform(post("/api/v1/admin/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"categoryId":"%s","productTypeId":"%s","name":"Cyberpunk 2077","description":"A game","slug":"cyberpunk-2077","brand":"CD Projekt","platform":"PC","region":"GLOBAL","basePrice":24999,"baseCurrency":"BRL"}
+                                """.formatted(UUID.randomUUID(), UUID.randomUUID())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.categoryId").doesNotExist())
+                .andExpect(jsonPath("$.categoryIds.length()").value(2));
+    }
+
+    @Test
+    @WithMockUser(authorities = "SCOPE_ADMIN")
+    @DisplayName("Should reject product creation without a product type")
+    void adminCreateProductWithoutProductType() throws Exception {
         mockMvc.perform(post("/api/v1/admin/products")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"categoryId":"%s","name":"Cyberpunk 2077","description":"A game","slug":"cyberpunk-2077","brand":"CD Projekt","platform":"PC","region":"GLOBAL","basePrice":24999,"baseCurrency":"BRL"}
                                 """.formatted(UUID.randomUUID())))
-                .andExpect(status().isCreated());
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -110,6 +132,16 @@ class ProductAdminControllerSecurityTest {
     }
 
     @Test
+    @WithMockUser(authorities = "SCOPE_ADMIN")
+    void productDetailsExposeAllCategoriesWithoutLegacyCategoryId() throws Exception {
+        when(productService.findById(any(UUID.class))).thenReturn(productResponse(ProductStatus.DRAFT));
+        mockMvc.perform(get("/api/v1/admin/products/{id}", UUID.randomUUID()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.categoryId").doesNotExist())
+                .andExpect(jsonPath("$.categoryIds.length()").value(2));
+    }
+
+    @Test
     @WithMockUser(authorities = "SCOPE_CUSTOMER")
     @DisplayName("Customer should not access admin product routes")
     void customerIsForbidden() throws Exception {
@@ -124,8 +156,8 @@ class ProductAdminControllerSecurityTest {
         mockMvc.perform(post("/api/v1/admin/products")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"categoryId":"%s","name":"Cyberpunk 2077","slug":"cyberpunk-2077","platform":"PC","region":"GLOBAL","basePrice":24999,"baseCurrency":"BRL"}
-                                """.formatted(UUID.randomUUID())))
+                                {"categoryId":"%s","productTypeId":"%s","name":"Cyberpunk 2077","slug":"cyberpunk-2077","platform":"PC","region":"GLOBAL","basePrice":24999,"baseCurrency":"BRL"}
+                                """.formatted(UUID.randomUUID(), UUID.randomUUID())))
                 .andExpect(status().isForbidden());
     }
 
@@ -138,8 +170,8 @@ class ProductAdminControllerSecurityTest {
 
     private ProductResponse productResponse(ProductStatus status) {
         return new ProductResponse(
-                UUID.randomUUID(), UUID.randomUUID(), "Cyberpunk 2077", "A game", "cyberpunk-2077",
-                "CD Projekt", "PC", "GLOBAL", 24999L, "BRL", status,
+                UUID.randomUUID(), List.of(UUID.randomUUID(), UUID.randomUUID()), UUID.randomUUID(), "Cyberpunk 2077", "A game", null,
+                "cyberpunk-2077", "CD Projekt", "PC", "GLOBAL", 24999L, "BRL", status,
                 null, null, Instant.now(), Instant.now());
     }
 }

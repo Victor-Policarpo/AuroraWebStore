@@ -1,5 +1,6 @@
 package com.webstore.commerce.exception;
 
+import com.webstore.commerce.exception.errors.BadRequestException;
 import com.webstore.commerce.exception.errors.ExternalApiAuthenticationException;
 import com.webstore.commerce.exception.errors.ExternalApiException;
 import com.webstore.commerce.exception.errors.ExternalApiRateLimitException;
@@ -77,6 +78,16 @@ class GlobalExceptionHandlerTest {
                 .andExpect(jsonPath("$.error").value("Resource not found"));
     }
 
+    @Test
+    @DisplayName("Should map project bad request failures to 400")
+    void mapsBadRequestToBadRequestStatus() throws Exception {
+        mockMvc.perform(get("/test/bad-request"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.message").value("Product type is inactive"));
+    }
+
     @RestController
     static class FailingController {
 
@@ -103,6 +114,11 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/test/not-found")
         void notFound() {
             throw new ResourceNotFoundException("Missing");
+        }
+
+        @GetMapping("/test/bad-request")
+        void badRequest() {
+            throw new BadRequestException("Product type is inactive");
         }
     }
 }

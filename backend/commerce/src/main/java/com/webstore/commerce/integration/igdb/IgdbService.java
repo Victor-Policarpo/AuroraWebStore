@@ -1,20 +1,18 @@
 package com.webstore.commerce.integration.igdb;
 
 import com.webstore.commerce.dto.response.IgdbGameSearchResponse;
-import com.webstore.commerce.integration.igdb.dto.IgdbGameResponse;
-import com.webstore.commerce.integration.igdb.dto.IgdbNamedResponse;
+import com.webstore.commerce.exception.errors.ExternalApiException;
+import com.webstore.commerce.integration.igdb.dto.*;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 public class IgdbService {
 
     private final IgdbClient igdbClient;
-
-    public IgdbService(IgdbClient igdbClient) {
-        this.igdbClient = igdbClient;
-    }
 
     public List<IgdbGameSearchResponse> searchGames(String searchTerm) {
         return igdbClient.searchGames(searchTerm)
@@ -43,6 +41,70 @@ public class IgdbService {
         );
     }
 
+    public IgdbGetGameResponse getGame(Long igdbId) {
+        return mapToResponse(igdbClient.getGame(igdbId));
+    }
+
+    public IgdbGetGameResponse mapToResponse(IgdbGame dto) {
+        String coverImageId = dto.cover() != null
+                ? dto.cover().image_id()
+                : null;
+
+        List<String> artworksImageIds = extractImageIds(dto.artworks());
+        List<String> screenshotsImageIds = extractImageIds(dto.screenshots());
+
+        String trailerUrl = null;
+
+        if (dto.videos() != null && !dto.videos().isEmpty()) {
+            String videoId = dto.videos().getFirst().video_id();
+
+            if (videoId != null && !videoId.isBlank()) {
+                trailerUrl = "https://www.youtube.com/watch?v=" + videoId;
+            }
+        }
+
+        List<String> genres = extractNames(dto.genres());
+        List<String> platforms = extractNames(dto.platforms());
+
+        List<IgdbCompanyResponse> companies =
+                dto.involved_companies() != null
+                        ? dto.involved_companies().stream()
+                        .filter(ic -> ic != null
+                                && ic.company() != null
+                                && ic.company().name() != null)
+                        .map(ic -> new IgdbCompanyResponse(
+                                ic.company().name(),
+                                ic.developer(),
+                                ic.publisher()
+                        ))
+                        .toList()
+                        : List.of();
+
+        return new IgdbGetGameResponse(
+                dto.id(),
+                dto.name(),
+                dto.summary(),
+                trailerUrl,
+                coverImageId,
+                artworksImageIds,
+                screenshotsImageIds,
+                genres,
+                platforms,
+                companies
+        );
+    }
+
+    private List<String> extractImageIds(List<IgdbImage> images) {
+        if (images == null) {
+            return List.of();
+        }
+
+        return images.stream()
+                .filter(image -> image != null && image.image_id() != null)
+                .map(IgdbImage::image_id)
+                .toList();
+    }
+
     private List<String> extractNames(List<IgdbNamedResponse> items) {
         if (items == null) {
             return List.of();
@@ -55,10 +117,9 @@ public class IgdbService {
     }
 
     private String normalizeImageUrl(String url) {
-        if (url.startsWith("//")) {
-            return "https:" + url;
-        }
-
-        return url;
+       if (url == null || url.isBlank()) {
+           throw new ExternalApiException("IGDB image URL is null or blank");
+       }
+        return url.startsWith("//") ? "https:" + url : url;
     }
 }
