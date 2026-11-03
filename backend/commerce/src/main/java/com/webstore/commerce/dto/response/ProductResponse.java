@@ -4,12 +4,15 @@ import com.webstore.commerce.entity.enums.ProductStatus;
 
 import java.time.Instant;
 import java.util.UUID;
+import java.util.List;
 
 public record ProductResponse(
         UUID id,
-        UUID categoryId,
+        List<UUID> categoryIds,
+        UUID productTypeId,
         String name,
         String description,
+        String trailerUrl,
         String slug,
         String brand,
         String platform,
@@ -21,5 +24,4 @@ public record ProductResponse(
         Long steamAppId,
         Instant createdAt,
         Instant updatedAt
-) {
-}
+) {}

@@ -6,6 +6,7 @@ import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
 import java.util.UUID;
+import java.util.List;
 
 public record UpdateProductRequest(
         @Size(max = 200, message = "This field must contain at most 200 characters.")
@@ -39,6 +40,16 @@ public record UpdateProductRequest(
         @Positive(message = "This field must be a positive number.")
         Long steamAppId,
 
-        UUID categoryId
+        UUID categoryId,
+
+        UUID productTypeId,
+
+        List<UUID> categoryIds
 ) {
+    public UpdateProductRequest(String name, String description, String slug, String brand, String platform,
+                                String region, Long basePrice, String baseCurrency, Long igdbId, Long steamAppId,
+                                UUID categoryId, UUID productTypeId) {
+        this(name, description, slug, brand, platform, region, basePrice, baseCurrency, igdbId, steamAppId,
+                categoryId, productTypeId, null);
+    }
 }

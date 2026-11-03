@@ -4,6 +4,8 @@ import com.webstore.commerce.entity.Category;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
+import java.util.Collection;
+import java.util.List;
 import java.util.UUID;
 
 public interface CategoryRepository extends JpaRepository<Category, UUID> {
@@ -17,4 +19,6 @@ public interface CategoryRepository extends JpaRepository<Category, UUID> {
     boolean existsBySlugAndIdNot(String slug, UUID id);
 
     Optional<Category> findBySlug(String slug);
+
+    List<Category> findByNameInAndActiveTrue(Collection<String> names);
 }

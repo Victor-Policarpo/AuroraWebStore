@@ -23,7 +23,7 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
     @Query("""
             SELECT p FROM Product p
             WHERE (:status IS NULL OR p.status = :status)
-              AND (:categoryId IS NULL OR p.category.id = :categoryId)
+              AND (:categoryId IS NULL OR :categoryId MEMBER OF p.categories)
             """)
     Page<Product> search(@Param("status") ProductStatus status,
                          @Param("categoryId") UUID categoryId,

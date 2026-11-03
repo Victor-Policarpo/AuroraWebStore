@@ -6,12 +6,15 @@ import com.webstore.commerce.dto.request.UpdateProductStatusRequest;
 import com.webstore.commerce.dto.response.ProductResponse;
 import com.webstore.commerce.entity.Category;
 import com.webstore.commerce.entity.Product;
+import com.webstore.commerce.entity.ProductType;
 import com.webstore.commerce.entity.enums.ProductStatus;
+import com.webstore.commerce.exception.errors.BadRequestException;
 import com.webstore.commerce.exception.errors.ResourceAlreadyExistsException;
 import com.webstore.commerce.exception.errors.ResourceNotFoundException;
 import com.webstore.commerce.mapper.ProductMapper;
 import com.webstore.commerce.repository.CategoryRepository;
 import com.webstore.commerce.repository.ProductRepository;
+import com.webstore.commerce.repository.ProductTypeRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,6 +36,8 @@ class ProductServiceTest {
 
     private static final UUID CATEGORY_ID = UUID.randomUUID();
     private static final UUID OTHER_CATEGORY_ID = UUID.randomUUID();
+    private static final UUID PRODUCT_TYPE_ID = UUID.randomUUID();
+    private static final UUID OTHER_PRODUCT_TYPE_ID = UUID.randomUUID();
 
     @Mock
     private ProductRepository productRepository;
@@ -40,12 +45,16 @@ class ProductServiceTest {
     @Mock
     private CategoryRepository categoryRepository;
 
+    @Mock
+    private ProductTypeRepository productTypeRepository;
+
     private ProductService productService;
 
     @BeforeEach
     void setUp() {
         ProductMapper productMapper = Mappers.getMapper(ProductMapper.class);
-        productService = new ProductService(productRepository, categoryRepository, productMapper);
+        productService = new ProductService(
+                productRepository, categoryRepository, productTypeRepository, productMapper);
     }
 
     @Test
@@ -54,6 +63,8 @@ class ProductServiceTest {
         CreateProductRequest dto = createRequest(null);
         when(productRepository.existsBySlug(dto.slug())).thenReturn(false);
         when(categoryRepository.findById(CATEGORY_ID)).thenReturn(Optional.of(category(CATEGORY_ID)));
+        when(productTypeRepository.findById(PRODUCT_TYPE_ID))
+                .thenReturn(Optional.of(productType(PRODUCT_TYPE_ID, true)));
         when(productRepository.save(any(Product.class))).thenAnswer(invocation -> {
             Product toSave = invocation.getArgument(0);
             toSave.setId(UUID.randomUUID());
@@ -68,9 +79,11 @@ class ProductServiceTest {
         assertEquals("Cyberpunk 2077", saved.getName());
         assertEquals("cyberpunk-2077", saved.getSlug());
         assertEquals(CATEGORY_ID, saved.getCategory().getId());
+        assertEquals(PRODUCT_TYPE_ID, saved.getProductType().getId());
         assertEquals(ProductStatus.DRAFT, saved.getStatus());
         assertNotNull(response.id());
-        assertEquals(CATEGORY_ID, response.categoryId());
+        assertEquals(java.util.List.of(CATEGORY_ID), response.categoryIds());
+        assertEquals(PRODUCT_TYPE_ID, response.productTypeId());
         assertEquals(ProductStatus.DRAFT, response.status());
         verify(productRepository, never()).existsByIgdbId(any());
     }
@@ -108,6 +121,31 @@ class ProductServiceTest {
     }
 
     @Test
+    @DisplayName("Should throw not found when referenced product type does not exist")
+    void createProductThrowsExceptionWhenProductTypeDoesNotExist() {
+        CreateProductRequest dto = createRequest(null);
+        when(productRepository.existsBySlug(dto.slug())).thenReturn(false);
+        when(categoryRepository.findById(CATEGORY_ID)).thenReturn(Optional.of(category(CATEGORY_ID)));
+        when(productTypeRepository.findById(PRODUCT_TYPE_ID)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> productService.create(dto));
+        verify(productRepository, never()).save(any(Product.class));
+    }
+
+    @Test
+    @DisplayName("Should reject a new product associated with an inactive product type")
+    void createProductThrowsExceptionWhenProductTypeIsInactive() {
+        CreateProductRequest dto = createRequest(null);
+        when(productRepository.existsBySlug(dto.slug())).thenReturn(false);
+        when(categoryRepository.findById(CATEGORY_ID)).thenReturn(Optional.of(category(CATEGORY_ID)));
+        when(productTypeRepository.findById(PRODUCT_TYPE_ID))
+                .thenReturn(Optional.of(productType(PRODUCT_TYPE_ID, false)));
+
+        assertThrows(BadRequestException.class, () -> productService.create(dto));
+        verify(productRepository, never()).save(any(Product.class));
+    }
+
+    @Test
     @DisplayName("Should throw not found when product does not exist")
     void findByIdThrowsExceptionWhenProductDoesNotExist() {
         UUID id = UUID.randomUUID();
@@ -126,18 +164,20 @@ class ProductServiceTest {
 
         ProductResponse response = productService.update(
                 id, new UpdateProductRequest("New Name", "New description", null, null, null, null,
-                        null, null, null, null, null));
+                        null, null, null, null, null, null));
 
         assertEquals("New Name", response.name());
         assertEquals("New description", response.description());
         assertEquals("old-slug", response.slug());
         assertEquals(100L, response.basePrice());
         assertEquals(50L, response.igdbId());
-        assertEquals(CATEGORY_ID, response.categoryId());
+        assertEquals(java.util.List.of(CATEGORY_ID), response.categoryIds());
+        assertEquals(PRODUCT_TYPE_ID, response.productTypeId());
         assertEquals(ProductStatus.ACTIVE, response.status());
         verify(productRepository, never()).existsBySlugAndIdNot(any(), any());
         verify(productRepository, never()).existsByIgdbIdAndIdNot(any(), any());
         verify(categoryRepository, never()).findById(any());
+        verify(productTypeRepository, never()).findById(any());
     }
 
     @Test
@@ -150,7 +190,7 @@ class ProductServiceTest {
 
         assertThrows(ResourceAlreadyExistsException.class, () -> productService.update(
                 id, new UpdateProductRequest(null, null, "new-slug", null, null, null,
-                        null, null, null, null, null)));
+                        null, null, null, null, null, null)));
         verify(productRepository, never()).save(any(Product.class));
     }
 
@@ -164,7 +204,7 @@ class ProductServiceTest {
 
         assertThrows(ResourceAlreadyExistsException.class, () -> productService.update(
                 id, new UpdateProductRequest(null, null, null, null, null, null,
-                        null, null, 999L, null, null)));
+                        null, null, 999L, null, null, null)));
         verify(productRepository, never()).save(any(Product.class));
     }
 
@@ -178,7 +218,7 @@ class ProductServiceTest {
 
         assertThrows(ResourceNotFoundException.class, () -> productService.update(
                 id, new UpdateProductRequest(null, null, null, null, null, null,
-                        null, null, null, null, OTHER_CATEGORY_ID)));
+                        null, null, null, null, OTHER_CATEGORY_ID, null)));
         verify(productRepository, never()).save(any(Product.class));
     }
 
@@ -193,10 +233,57 @@ class ProductServiceTest {
 
         ProductResponse response = productService.update(
                 id, new UpdateProductRequest(null, null, null, null, null, null,
-                        null, null, null, null, OTHER_CATEGORY_ID));
+                        null, null, null, null, OTHER_CATEGORY_ID, null));
 
-        assertEquals(OTHER_CATEGORY_ID, response.categoryId());
+        assertEquals(java.util.List.of(OTHER_CATEGORY_ID), response.categoryIds());
         assertEquals(OTHER_CATEGORY_ID, product.getCategory().getId());
+    }
+
+    @Test
+    @DisplayName("Should assign the new product type when productTypeId is provided on update")
+    void updateProductAssignsNewProductType() {
+        UUID id = UUID.randomUUID();
+        Product product = product(id, ProductStatus.DRAFT);
+        when(productRepository.findById(id)).thenReturn(Optional.of(product));
+        when(productTypeRepository.findById(OTHER_PRODUCT_TYPE_ID))
+                .thenReturn(Optional.of(productType(OTHER_PRODUCT_TYPE_ID, true)));
+        when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ProductResponse response = productService.update(
+                id, new UpdateProductRequest(null, null, null, null, null, null,
+                        null, null, null, null, null, OTHER_PRODUCT_TYPE_ID));
+
+        assertEquals(OTHER_PRODUCT_TYPE_ID, response.productTypeId());
+        assertEquals(OTHER_PRODUCT_TYPE_ID, product.getProductType().getId());
+    }
+
+    @Test
+    @DisplayName("Should reject changing a product to an inactive product type")
+    void updateProductThrowsExceptionWhenProductTypeIsInactive() {
+        UUID id = UUID.randomUUID();
+        Product product = product(id, ProductStatus.DRAFT);
+        when(productRepository.findById(id)).thenReturn(Optional.of(product));
+        when(productTypeRepository.findById(OTHER_PRODUCT_TYPE_ID))
+                .thenReturn(Optional.of(productType(OTHER_PRODUCT_TYPE_ID, false)));
+
+        assertThrows(BadRequestException.class, () -> productService.update(
+                id, new UpdateProductRequest(null, null, null, null, null, null,
+                        null, null, null, null, null, OTHER_PRODUCT_TYPE_ID)));
+        verify(productRepository, never()).save(any(Product.class));
+    }
+
+    @Test
+    @DisplayName("Should throw not found when changing to a nonexistent product type")
+    void updateProductThrowsExceptionWhenProductTypeDoesNotExist() {
+        UUID id = UUID.randomUUID();
+        Product product = product(id, ProductStatus.DRAFT);
+        when(productRepository.findById(id)).thenReturn(Optional.of(product));
+        when(productTypeRepository.findById(OTHER_PRODUCT_TYPE_ID)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> productService.update(
+                id, new UpdateProductRequest(null, null, null, null, null, null,
+                        null, null, null, null, null, OTHER_PRODUCT_TYPE_ID)));
+        verify(productRepository, never()).save(any(Product.class));
     }
 
     @Test
@@ -227,7 +314,7 @@ class ProductServiceTest {
 
     private CreateProductRequest createRequest(Long igdbId) {
         return new CreateProductRequest(
-                CATEGORY_ID, "Cyberpunk 2077", "A role-playing game", "cyberpunk-2077",
+                CATEGORY_ID, PRODUCT_TYPE_ID, "Cyberpunk 2077", "A role-playing game", "cyberpunk-2077",
                 "CD Projekt", "PC", "GLOBAL", 24999L, "BRL", igdbId, null);
     }
 
@@ -237,10 +324,19 @@ class ProductServiceTest {
         return category;
     }
 
+    private ProductType productType(UUID id, boolean active) {
+        ProductType productType = new ProductType();
+        productType.setId(id);
+        productType.setName("GAME");
+        productType.setActive(active);
+        return productType;
+    }
+
     private Product product(UUID id, ProductStatus status) {
         Product product = new Product();
         product.setId(id);
         product.setCategory(category(CATEGORY_ID));
+        product.setProductType(productType(PRODUCT_TYPE_ID, true));
         product.setName("Old Name");
         product.setDescription("Old description");
         product.setSlug("old-slug");
