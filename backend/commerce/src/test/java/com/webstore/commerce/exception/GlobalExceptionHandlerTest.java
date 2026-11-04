@@ -5,6 +5,7 @@ import com.webstore.commerce.exception.errors.ExternalApiAuthenticationException
 import com.webstore.commerce.exception.errors.ExternalApiException;
 import com.webstore.commerce.exception.errors.ExternalApiRateLimitException;
 import com.webstore.commerce.exception.errors.ResourceNotFoundException;
+import com.webstore.commerce.exception.errors.SupplierConfigurationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -88,6 +89,17 @@ class GlobalExceptionHandlerTest {
                 .andExpect(jsonPath("$.message").value("Product type is inactive"));
     }
 
+    @Test
+    @DisplayName("Should map supplier configuration failures to 500")
+    void mapsSupplierConfigurationFailureToInternalServerError() throws Exception {
+        mockMvc.perform(get("/test/supplier-configuration"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.status").value(500))
+                .andExpect(jsonPath("$.error").value("Supplier configuration error"))
+                .andExpect(jsonPath("$.message")
+                        .value("Não foi possível processar a integração de fornecedores no momento."));
+    }
+
     @RestController
     static class FailingController {
 
@@ -119,6 +131,11 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/test/bad-request")
         void badRequest() {
             throw new BadRequestException("Product type is inactive");
+        }
+
+        @GetMapping("/test/supplier-configuration")
+        void supplierConfiguration() {
+            throw new SupplierConfigurationException("No client configured");
         }
     }
 }
