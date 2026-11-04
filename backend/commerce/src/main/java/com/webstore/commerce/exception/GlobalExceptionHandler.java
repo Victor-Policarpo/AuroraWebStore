@@ -8,6 +8,7 @@ import com.webstore.commerce.exception.errors.ExternalApiException;
 import com.webstore.commerce.exception.errors.ExternalApiRateLimitException;
 import com.webstore.commerce.exception.errors.ResourceAlreadyExistsException;
 import com.webstore.commerce.exception.errors.ResourceNotFoundException;
+import com.webstore.commerce.exception.errors.SupplierConfigurationException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.context.MessageSourceResolvable;
 import org.springframework.http.HttpHeaders;
@@ -164,6 +165,18 @@ public class GlobalExceptionHandler {
         err.setMessage(e.getMessage());
         err.setPath(request.getRequestURI());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
+    }
+
+    @ExceptionHandler(SupplierConfigurationException.class)
+    public ResponseEntity<StandardError> supplierConfiguration(SupplierConfigurationException e,
+                                                                 HttpServletRequest request) {
+        StandardError err = new StandardError();
+        err.setTimestamp(Instant.now());
+        err.setStatus(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        err.setError("Supplier configuration error");
+        err.setMessage("Não foi possível processar a integração de fornecedores no momento.");
+        err.setPath(request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(err);
     }
 
 }
